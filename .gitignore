@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.build/
+dist/
+*.log
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Ultralytics / YOLO outputs
+runs/
+wandb/
+
+# Checkpoints / weights (use LFS or re-download)
+*.pt
+*.onnx
+*.engine
+*.tflite
+*.torchscript
+*.bin
+
+# Temporary / caches
+.cache/
+*.cache
+*.tmp
+
+# Large raw data (keep only if needed)
+data/arena_02/game_01/
+# If you DO want small sample frames for reproducibility,
+# move 3–5 sample images to data/samples/ and remove the ignore for them.
+
+# Auto-generated label cache
+*.labels.cache
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Images you might not want every version of (optional)
+*.jpg
+*.jpeg
+*.png
+*.bmp
