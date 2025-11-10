@@ -1,0 +1,6 @@
+path: E:\Projects\CS541\ClashRoyale\data\towers
+train: images
+val: images 
+names:
+  0: king_tower
+  1: princess_tower
