@@ -1,11 +1,93 @@
-from huggingface_hub import hf_hub_download, snapshot_download
-import joblib
+import random
+import argparse
+from pathlib import Path
+from typing import Dict, List, Tuple
+from huggingface_hub import list_repo_files, hf_hub_download
 
-REPO_ID = "chrisrca/clash-royale-tv-replays"
+DATASET_ID = "chrisrca/clash-royale-tv-replays"
 
-snapshot_download(
-    repo_id = REPO_ID,
-    repo_type = "dataset",
-    allow_patterns = "arena_02/2ceed9bf-ff35-4787-9304-e72ca0b1a9b3/*",
-    local_dir = "E:\Projects\CS541\ClashRoyale\data"
-)
+# by_arena: {"arena_02": [(game_uuid, "arena_02/<uuid>/frames.parquet"), ...], ...}
+def discover_frames(dataset_id: str) -> Dict[str, List[Tuple[str, str]]]:
+    files = list_repo_files(dataset_id, repo_type="dataset")
+    frame_paths = [f for f in files if f.endswith("frames.parquet")]
+    by_arena = {}
+    for p in frame_paths:
+        parts = p.split("/")
+        # Expect: arena_xx/<uuid>/frames.parquet
+        if len(parts) >= 3 and parts[0].startswith("arena_"):
+            arena = parts[0]
+            game_folder = parts[1]
+            by_arena.setdefault(arena, []).append((game_folder, p))
+    return by_arena
+
+# Returns: list of (arena, game_folder, path_in_repo)
+def sample_frames(by_arena: Dict[str, List[Tuple[str, str]]],
+                  arenas: List[str],
+                  per_arena: int,
+                  seed: int) -> List[Tuple[str, str, str]]:
+    random.seed(seed)
+    selected = []
+    for arena in arenas:
+        candidates = by_arena.get(arena, [])
+        if not candidates:
+            print(f"[WARN] No frames.parquet entries found for {arena}")
+            continue
+        if per_arena >= len(candidates):
+            chosen = candidates  # take all available
+        else:
+            chosen = random.sample(candidates, per_arena)
+        selected.extend([(arena, game_folder, repo_path) for (game_folder, repo_path) in chosen])
+        print(f"[INFO] Selected {len(chosen):>3} from {arena} (available: {len(candidates)})")
+    return selected
+
+def download_selected(dataset_id: str,
+                      selection: List[Tuple[str, str, str]],
+                      out_dir: Path,
+                      overwrite: bool = False) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for arena, game_folder, repo_path in selection:
+        local_game_dir = out_dir / arena / game_folder
+        local_game_dir.mkdir(parents=True, exist_ok=True)
+        local_target = local_game_dir / "frames.parquet"
+        if local_target.exists() and not overwrite:
+            print(f"[SKIP] Exists: {local_target}")
+            continue
+        print(f"[DL] {repo_path} -> {local_target}")
+        cache_path = hf_hub_download(
+            repo_id=dataset_id,
+            filename=repo_path,
+            repo_type="dataset"
+        )
+        local_target.write_bytes(Path(cache_path).read_bytes())
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default=DATASET_ID)
+    ap.add_argument("--arenas", nargs="+", help="Arena folders (e.g. arena_01 arena_02). If absent, use all discovered.")
+    ap.add_argument("--all-arenas", action="store_true", help="Use all discovered arenas (overrides --arenas)")
+    ap.add_argument("--per-arena", type=int, default=3, help="Minimum/target frames.parquet per arena")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--out", default="/home/ostikar/MyProjects/CS541/ClashRoyale/hf_subset")
+    ap.add_argument("--overwrite", action="store_true")
+    args = ap.parse_args()
+
+    by_arena = discover_frames(args.dataset)
+    discovered = sorted(by_arena.keys())
+    print(f"[INFO] Discovered arenas: {discovered}")
+
+    if args.all_arenas or not args.arenas:
+        arenas = discovered
+    else:
+        arenas = args.arenas
+
+    if not arenas:
+        print("[ERROR] No arenas selected or discovered."); return
+
+    selection = sample_frames(by_arena, arenas, args.per_arena, args.seed)
+    print(f"[INFO] Total files to download: {len(selection)}")
+
+    download_selected(args.dataset, selection, Path(args.out), overwrite=args.overwrite)
+    print("[DONE]")
+
+if __name__ == "__main__":
+    main()

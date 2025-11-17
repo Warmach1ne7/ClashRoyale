@@ -3,19 +3,19 @@ from pathlib import Path
 import cv2
 import shutil
 
-RAW_DIR = Path(r"E:\Projects\CS541\ClashRoyale\data\arena_02\game_01")
-OUT_DIR = Path(r"E:\Projects\CS541\ClashRoyale\data\towers")
+RAW_DIR = Path(r"/home/ostikar/MyProjects/CS541/ClashRoyale/data/arena_02/game_01")
+OUT_DIR = Path(r"/home/ostikar/MyProjects/CS541/ClashRoyale/data/towers")
 IMG_OUT = OUT_DIR / "images"
 LBL_OUT = OUT_DIR / "labels"
 OUT_DIR.mkdir(parents=True, exist_ok=True); IMG_OUT.mkdir(exist_ok=True); LBL_OUT.mkdir(exist_ok=True)
 
 DEFAULT_ROIS = {
-    "king_top":       [0.500, 0.085, 0.615, 0.165],   # example placeholders — update using draw mode!
-    "princess_top_l": [0.185, 0.195, 0.265, 0.275],
-    "princess_top_r": [0.735, 0.195, 0.815, 0.275],
-    "king_bottom":    [0.385, 0.835, 0.500, 0.915],
-    "princess_bot_l": [0.185, 0.705, 0.265, 0.785],
-    "princess_bot_r": [0.735, 0.705, 0.815, 0.785],
+    "king_top": [0.5777777777777777, 0.2989583333333333, 0.5777777777777777, 0.2989583333333333],
+    "princess_top_l": [0.18333333333333332, 0.2604166666666667, 0.3296296296296296, 0.35833333333333334],
+    "princess_top_r": [0.6722222222222223, 0.25625, 0.8185185185185185, 0.36041666666666666],
+    "king_bottom": [0.43333333333333335, 0.7270833333333333, 0.5722222222222222, 0.8677083333333333],
+    "princess_bot_l": [0.18703703703703703, 0.6645833333333333, 0.5740740740740741, 0.8666666666666667],
+    "princess_bot_r": [0.3333333333333333, 0.6645833333333333, 0.674074074074074, 0.7458333333333333],
 }
 CLASS_ID = {"king": 0, "princess": 1}
 ROIS_PATH = OUT_DIR / "rois.json"

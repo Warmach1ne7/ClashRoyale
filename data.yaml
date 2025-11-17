@@ -1,6 +1,12 @@
-path: E:\Projects\CS541\ClashRoyale\data\towers
-train: images
-val: images 
+# Clash Royale Tower Detection Dataset
+path: /home/ostikar/MyProjects/CS541/ClashRoyale/data/yolo_dataset
+train: train/images
+val: val/images
+test: test/images
+
 names:
-  0: king_tower
-  1: princess_tower
+  0: king
+  1: princess
+  2: level_badge
+  3: health_text
+  4: health_bar
