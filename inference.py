@@ -2,11 +2,11 @@ from ultralytics import YOLO
 from pathlib import Path
 
 # Load the trained model
-MODEL_PATH = "runs/detect/tower_detection/weights/best.pt"
+MODEL_PATH = "runs/detect/tower_detection4/weights/best.pt"
 model = YOLO(MODEL_PATH)
 
 # Path to test images
-TEST_SOURCE = "/home/ostikar/MyProjects/CS541/ClashRoyale/data/arena_01/game_01"
+TEST_SOURCE = "/home/ostikar/MyProjects/CS541/ClashRoyale/data/arena_10/game_2/images"
 
 # Run inference and save annotated images
 results = model.predict(

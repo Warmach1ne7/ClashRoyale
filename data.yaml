@@ -7,6 +7,3 @@ test: test/images
 names:
   0: king
   1: princess
-  2: level_badge
-  3: health_text
-  4: health_bar

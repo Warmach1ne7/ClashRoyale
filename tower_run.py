@@ -4,7 +4,7 @@ import wandb
 wandb.init(project="clash-royale", name="towers_bars_finetune_v1")
 
 # Load your best tower detection weights
-model = YOLO('runs/detect/tower_detection4/weights/best.pt')
+model = YOLO('yolo11n.pt')
 
 # Fine-tune to also detect health bars
 results = model.train(
@@ -12,7 +12,7 @@ results = model.train(
     epochs=50,  # Fewer epochs since starting from trained weights
     imgsz=640,
     batch=64,  # Increased batch size
-    name='towers_bars_finetune',
+    name='towers5',
     project='runs/detect',
     patience=12,  # Early stopping
     save=True,
@@ -51,7 +51,7 @@ print(f"  mAP50: {test_metrics.box.map50:.4f}")
 print(f"  mAP50-95: {test_metrics.box.map:.4f}")
 
 # Per-class metrics
-class_names = ['king', 'princess', 'unused_2', 'unused_3', 'health_bar']
+class_names = ['king', 'princess']
 print(f"\nPer-class mAP50:")
 for i, name in enumerate(class_names):
     if i < len(test_metrics.box.maps) and test_metrics.box.maps[i] > 0:

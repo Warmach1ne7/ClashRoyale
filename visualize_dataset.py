@@ -3,7 +3,7 @@ from pathlib import Path
 import random
 
 # Paths
-DATA_DIR = Path("/home/ostikar/MyProjects/CS541/ClashRoyale/data/arena_05/game_2")
+DATA_DIR = Path("/home/ostikar/MyProjects/CS541/ClashRoyale/data/arena_08/game_2")
 IMG_DIR = DATA_DIR / "images"
 LBL_DIR = DATA_DIR / "labels"
 OUTPUT_DIR = DATA_DIR / "visualizations"
