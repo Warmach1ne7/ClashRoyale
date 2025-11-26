@@ -88,7 +88,7 @@ def find_parquets(root: Path, parquet_name: str):
 
 def main():
     ap = argparse.ArgumentParser(description="Extract images adjacent to Parquet files under arena_* folders.")
-    ap.add_argument("--root", default="/home/ostikar/MyProjects/CS541/ClashRoyale/hf_subset",
+    ap.add_argument("--root", default="E:\Projects\CS541\ClashRoyale\hf_subset",
                     help="Root containing arena_* folders.")
     ap.add_argument("--parquet-name", default="frames.parquet",
                     help="Parquet filename to find inside arena subfolders.")

@@ -67,7 +67,7 @@ def main():
     ap.add_argument("--all-arenas", action="store_true", help="Use all discovered arenas (overrides --arenas)")
     ap.add_argument("--per-arena", type=int, default=3, help="Minimum/target frames.parquet per arena")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out", default="/home/ostikar/MyProjects/CS541/ClashRoyale/hf_subset")
+    ap.add_argument("--out", default="E:\Projects\CS541\ClashRoyale\hf_subset")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
