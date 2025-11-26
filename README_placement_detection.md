@@ -14,53 +14,137 @@ Template matching works by:
 3. Computing similarity scores at each position
 4. Identifying locations with high similarity as detections
 
-## Step-by-Step Usage
+### ⚠️ Important: Clock Animation Challenge
 
-### Step 1: Create Clock Template
+The placement clock in Clash Royale is **animated** - the clock hands rotate and the blue timer overlay changes as time passes. This creates a challenge for standard template matching because:
 
-First, you need to create a template of the placement clock:
+- **Clock hands change position** - A static template won't match different hand positions
+- **Blue timer overlay decreases** - The amount of blue changes over time
+- **Standard template matching fails** - A single template can't capture all states
 
-```bash
-# Interactive tool - click and drag to select the clock region
-python detect_placement.py create_template /path/to/frame/with/clock.png
-```
+### Solutions
 
-This will:
-- Open the image in a window
-- Let you select the clock region by clicking and dragging
-- Press 's' to save the template as `clock_template.png`
+We provide **two approaches**:
 
-**Tips for selecting the template:**
-- Choose a clear, high-contrast clock
-- Include only the clock icon (not surrounding area)
-- The clock should be from a typical placement (not scaled/rotated)
+1. **Standard Template Matching** (`detect_placement.py`)
+   - Use multiple templates for different clock states
+   - Best when you can capture 5-10 template variants
+   - Fast and simple
 
-### Step 2: Detect Placements in Single Image
+2. **Robust Detection Methods** (`detect_placement_robust.py`) ⭐ **Recommended**
+   - **Color + Shape**: Detects the blue timer overlay + circular shape
+   - **Edge Pattern**: Uses Hough Circle Transform to find circular clock borders
+   - **Feature Matching**: SIFT/ORB features robust to appearance changes
+   - **Ensemble**: Combines all methods for best accuracy
 
-```bash
-python detect_placement.py detect /path/to/test/frame.png clock_template.png
-```
+## Recommended Approach: Robust Detection
 
-This will:
-- Load the template
-- Search for matching regions in the image
-- Print detected positions and confidence scores
-- Save a visualization with markers
-
-### Step 3: Batch Detection Across Multiple Frames
+Since the clock is animated, **use the robust detector** which doesn't rely on exact pixel matching:
 
 ```bash
-python detect_placement.py batch /path/to/frames/directory clock_template.png
+# Color + shape detection (works regardless of clock hands)
+python detect_placement_robust.py color /path/to/frame.png
+
+# Edge-based detection (finds circular clock borders)
+python detect_placement_robust.py edge /path/to/frame.png
+
+# Ensemble method (combines all approaches) - BEST ACCURACY
+python detect_placement_robust.py ensemble /path/to/frame.png
 ```
 
-This will:
-- Process all PNG images in the directory
-- Detect placements in each frame
-- Save results to `placement_detections.json`
+### How Robust Methods Handle Animation
+
+**Color + Shape Detection:**
+- Focuses on the **blue timer overlay** color (consistent across animation)
+- Detects **circular shape** (clock border doesn't change)
+- Ignores the varying clock hands inside
+
+**Edge Pattern Detection:**
+- Uses **Hough Circle Transform** to find circular objects
+- Clock border creates consistent circular edges
+- Verifies by checking for blue pixels inside the circle
+
+**Feature Matching:**
+- Extracts keypoint features (corners, edges)
+- Matches features even if some pixels change
+- More computationally expensive but very robust
+
+## Alternative: Multi-Template Matching
+
+If you prefer template matching, use multiple templates:
+
+### Step 1: Create Multiple Clock Templates
+
+Instead of one template, create 5-10 templates showing different clock states:
+
+```bash
+# Find frames with clocks at different animation states
+# Frame 1: Clock just appeared (full blue timer)
+python detect_placement.py create_template frame_100.png
+# Save as clock_template_1.png
+
+# Frame 2: Clock halfway through (partial blue)
+python detect_placement.py create_template frame_105.png
+# Save as clock_template_2.png
+
+# Frame 3: Clock almost done (little blue)
+python detect_placement.py create_template frame_108.png
+# Save as clock_template_3.png
+
+# Continue for 5-10 different states...
+```
+
+### Step 2: Use Multi-Template Detector
+
+```python
+from detect_placement import PlacementDetector
+
+detector = PlacementDetector()
+
+# Load all your templates
+detector.clock_templates = []
+for i in range(1, 11):
+    template = cv2.imread(f"clock_template_{i}.png", cv2.IMREAD_GRAYSCALE)
+    detector.clock_templates.append(template)
+
+# Detect - will try all templates
+detections = detector.detect_multi_template("frame_200.png")
+```
+
+**However, the robust methods are easier and more effective!**
 
 ## Using the Python API
 
-You can also use the detector programmatically:
+### Robust Detection (Recommended)
+
+```python
+from detect_placement_robust import RobustPlacementDetector
+
+# Initialize detector
+detector = RobustPlacementDetector(threshold=0.7)
+
+# Method 1: Color and shape (best for animated clocks)
+detections = detector.detect_by_color_and_shape("frame_0100.png")
+
+# Method 2: Edge pattern detection
+detections = detector.detect_by_edge_pattern("frame_0100.png")
+
+# Method 3: Ensemble (combines all methods) - MOST ACCURATE
+detections = detector.detect_ensemble("frame_0100.png")
+
+# Results: list of (x, y, confidence)
+for x, y, conf in detections:
+    print(f"Placement at ({x}, {y}) with confidence {conf:.2f}")
+
+# Visualize
+detector.visualize_detections(
+    "frame_0100.png",
+    detections,
+    output_path="result.png"
+)
+```
+
+### Standard Template Matching (For Reference)
 
 ```python
 from detect_placement import PlacementDetector
@@ -90,6 +174,28 @@ detector.visualize_detections(
 ```
 
 ## Parameters to Tune
+
+### For Robust Detection
+
+**Color Detection:**
+- `blue_lower/upper`: HSV range for blue timer overlay
+  - Default: `[100, 100, 100]` to `[130, 255, 255]`
+  - Adjust based on your video's color profile
+  
+- `circularity_threshold`: How circular the shape must be
+  - Default: 0.6 (60% circular)
+  - Higher = more strict (0.7-0.8 for perfect circles)
+
+**Edge Detection:**
+- `minRadius/maxRadius`: Expected clock size
+  - Default: 10-25 pixels
+  - Adjust based on your video resolution
+  
+- `param2` in HoughCircles: Detection sensitivity
+  - Lower = more circles detected (more false positives)
+  - Higher = fewer circles (might miss some)
+
+### For Template Matching
 
 ### Threshold (0-1)
 - **Higher (0.8-0.95)**: More strict, fewer false positives, may miss some placements
@@ -158,6 +264,18 @@ with open("placement_timeline.json", 'w') as f:
 ```
 
 ## Troubleshooting
+
+### Animation Issues
+
+**Problem: Template matching not working**
+- **Solution**: Switch to robust detection methods (color+shape or ensemble)
+- The clock animation makes single-template matching unreliable
+
+**Problem: Detecting clocks at wrong animation phase**
+- **Solution**: Use color+shape detection which ignores hand position
+- Or create 5-10 templates for different phases
+
+### Detection Quality
 
 ### No detections / Too few detections
 - **Lower the threshold**: Try 0.6 or 0.65

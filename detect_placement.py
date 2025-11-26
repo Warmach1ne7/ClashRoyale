@@ -66,24 +66,62 @@ class PlacementDetector:
         
         return self.template
     
+    def load_multiple_templates(self, template_dir: str):
+        """
+        Load multiple clock templates from a directory.
+        Useful for handling different clock animation states.
+        
+        Args:
+            template_dir: Directory containing template images (clock_*.png)
+        """
+        template_path = Path(template_dir)
+        self.templates = []
+        
+        for img_path in sorted(template_path.glob("clock_*.png")):
+            template = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+            if template is not None:
+                self.templates.append({
+                    'image': template,
+                    'width': template.shape[1],
+                    'height': template.shape[0],
+                    'name': img_path.name
+                })
+        
+        if not self.templates:
+            raise ValueError(f"No clock_*.png templates found in {template_dir}")
+        
+        print(f"Loaded {len(self.templates)} clock templates:")
+        for t in self.templates:
+            print(f"  - {t['name']} ({t['width']}x{t['height']})")
+        
+        # Set primary template for backward compatibility
+        self.template = self.templates[0]['image']
+        self.template_w = self.templates[0]['width']
+        self.template_h = self.templates[0]['height']
+    
     def detect_placements(self, image_path: str, 
                          method: int = cv2.TM_CCOEFF_NORMED,
-                         multi_scale: bool = True,
-                         scales: List[float] = None) -> List[Tuple[int, int, float]]:
+                         multi_scale: bool = False,
+                         scales: List[float] = None,
+                         use_all_templates: bool = True) -> List[Tuple[int, int, float]]:
         """
         Detect placement locations in an image.
         
         Args:
             image_path: Path to the game frame image
             method: OpenCV template matching method
-            multi_scale: Whether to try multiple scales
-            scales: List of scales to try (default: [0.8, 0.9, 1.0, 1.1, 1.2])
+            multi_scale: Whether to try multiple scales (usually not needed at fixed FPS)
+            scales: List of scales to try (default: [0.9, 1.0, 1.1])
+            use_all_templates: If True and multiple templates loaded, tries all of them
         
         Returns:
             List of (x, y, confidence) tuples for detected placements
         """
-        if self.template is None:
-            raise ValueError("No template loaded. Call load_template() or create_template_from_roi() first.")
+        # Check if we have templates
+        has_multiple = hasattr(self, 'templates') and len(self.templates) > 0
+        
+        if not has_multiple and self.template is None:
+            raise ValueError("No template loaded. Call load_template() or load_multiple_templates() first.")
         
         # Load image
         img = cv2.imread(image_path)
@@ -92,42 +130,58 @@ class PlacementDetector:
         
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
+        # For 10fps with 1-second clock, multi-scale usually not needed
         if scales is None:
-            scales = [0.8, 0.9, 1.0, 1.1, 1.2]
-        
-        if not multi_scale:
-            scales = [1.0]
+            scales = [0.9, 1.0, 1.1] if multi_scale else [1.0]
         
         all_detections = []
         
-        # Try multiple scales
-        for scale in scales:
-            # Resize template
-            if scale != 1.0:
-                w = int(self.template_w * scale)
-                h = int(self.template_h * scale)
-                template_scaled = cv2.resize(self.template, (w, h))
-            else:
-                template_scaled = self.template
-                w, h = self.template_w, self.template_h
+        # Determine which templates to use
+        if has_multiple and use_all_templates:
+            templates_to_try = self.templates
+        else:
+            # Single template mode
+            templates_to_try = [{
+                'image': self.template,
+                'width': self.template_w,
+                'height': self.template_h,
+                'name': 'single'
+            }]
+        
+        # Try each template
+        for template_info in templates_to_try:
+            template_img = template_info['image']
+            template_w = template_info['width']
+            template_h = template_info['height']
             
-            # Skip if template is larger than image
-            if w > gray.shape[1] or h > gray.shape[0]:
-                continue
-            
-            # Perform template matching
-            result = cv2.matchTemplate(gray, template_scaled, method)
-            
-            # Find locations above threshold
-            locations = np.where(result >= self.threshold)
-            
-            # Store detections with their confidence scores
-            for pt in zip(*locations[::-1]):  # Switch x and y
-                confidence = result[pt[1], pt[0]]
-                # Store center point instead of top-left
-                center_x = pt[0] + w // 2
-                center_y = pt[1] + h // 2
-                all_detections.append((center_x, center_y, confidence, scale))
+            # Try multiple scales for this template
+            for scale in scales:
+                # Resize template
+                if scale != 1.0:
+                    w = int(template_w * scale)
+                    h = int(template_h * scale)
+                    template_scaled = cv2.resize(template_img, (w, h))
+                else:
+                    template_scaled = template_img
+                    w, h = template_w, template_h
+                
+                # Skip if template is larger than image
+                if w > gray.shape[1] or h > gray.shape[0]:
+                    continue
+                
+                # Perform template matching
+                result = cv2.matchTemplate(gray, template_scaled, method)
+                
+                # Find locations above threshold
+                locations = np.where(result >= self.threshold)
+                
+                # Store detections with their confidence scores
+                for pt in zip(*locations[::-1]):  # Switch x and y
+                    confidence = result[pt[1], pt[0]]
+                    # Store center point instead of top-left
+                    center_x = pt[0] + w // 2
+                    center_y = pt[1] + h // 2
+                    all_detections.append((center_x, center_y, confidence, scale))
         
         # Apply Non-Maximum Suppression to remove duplicate detections
         detections = self._non_max_suppression(all_detections, overlap_threshold=30)
@@ -302,37 +356,62 @@ def example_detect_placements():
                                   show=True)
 
 
-def batch_detect_placements(image_dir: str, template_path: str, 
-                           output_json: str = "placement_detections.json"):
+def batch_detect_placements(image_dir: str, template_path: str = None,
+                           template_dir: str = None,
+                           output_json: str = "placement_detections.json",
+                           threshold: float = 0.65):
     """
     Detect placements across multiple frames and save results.
     
     Args:
         image_dir: Directory containing game frames
-        template_path: Path to clock template
+        template_path: Path to single clock template (deprecated, use template_dir)
+        template_dir: Directory containing multiple clock templates (recommended)
         output_json: Where to save detection results
+        threshold: Detection threshold (0.65 recommended for 10fps data)
     """
-    detector = PlacementDetector(template_path=template_path, threshold=0.7)
+    detector = PlacementDetector(threshold=threshold)
+    
+    # Load templates
+    if template_dir:
+        detector.load_multiple_templates(template_dir)
+        print(f"Using multi-template mode with {len(detector.templates)} templates")
+    elif template_path:
+        detector.load_template(template_path)
+        print(f"Using single template mode")
+    else:
+        raise ValueError("Provide either template_path or template_dir")
     
     image_dir = Path(image_dir)
     results = {}
     
-    for img_path in sorted(image_dir.glob("*.png")):
-        detections = detector.detect_placements(str(img_path), multi_scale=True)
+    print(f"\nProcessing frames from {image_dir}...")
+    image_files = sorted(image_dir.glob("*.png"))
+    
+    for i, img_path in enumerate(image_files):
+        if (i + 1) % 100 == 0:
+            print(f"Processed {i + 1}/{len(image_files)} frames...")
+        
+        detections = detector.detect_placements(str(img_path), multi_scale=False)
         
         if detections:
             results[img_path.name] = [
                 {"x": int(x), "y": int(y), "confidence": float(conf)}
                 for x, y, conf in detections
             ]
-            print(f"{img_path.name}: {len(detections)} placements detected")
+            print(f"  {img_path.name}: {len(detections)} placements detected")
     
     # Save results
     with open(output_json, 'w') as f:
         json.dump(results, f, indent=2)
     
-    print(f"\nSaved results to {output_json}")
-    print(f"Total frames with placements: {len(results)}")
+    print(f"\n{'='*60}")
+    print(f"Saved results to {output_json}")
+    print(f"Total frames processed: {len(image_files)}")
+    print(f"Frames with placements: {len(results)}")
+    total_placements = sum(len(dets) for dets in results.values())
+    print(f"Total placements detected: {total_placements}")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
@@ -340,9 +419,12 @@ if __name__ == "__main__":
     
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Create template:  python detect_placement.py create_template <image_path>")
-        print("  Detect single:    python detect_placement.py detect <image_path> <template_path>")
-        print("  Detect batch:     python detect_placement.py batch <image_dir> <template_path>")
+        print("  Create template:     python detect_placement.py create_template <image_path>")
+        print("  Detect single:       python detect_placement.py detect <image_path> <template_path>")
+        print("  Detect multi-tmpl:   python detect_placement.py detect <image_path> --templates <template_dir>")
+        print("  Batch (single):      python detect_placement.py batch <image_dir> <template_path>")
+        print("  Batch (multi-tmpl):  python detect_placement.py batch <image_dir> --templates <template_dir>")
+        print("\nRecommended for 10fps data: Use multi-template mode with 5-10 templates")
         sys.exit(1)
     
     command = sys.argv[1]
@@ -355,25 +437,40 @@ if __name__ == "__main__":
     
     elif command == "detect":
         if len(sys.argv) < 4:
-            print("Error: Provide image_path and template_path")
+            print("Error: Provide image_path and template_path or --templates <dir>")
             sys.exit(1)
         
-        detector = PlacementDetector(template_path=sys.argv[3], threshold=0.7)
-        detections = detector.detect_placements(sys.argv[2])
+        image_path = sys.argv[2]
         
-        print(f"Found {len(detections)} placements:")
+        # Check if using multi-template mode
+        if sys.argv[3] == "--templates" and len(sys.argv) >= 5:
+            detector = PlacementDetector(threshold=0.65)
+            detector.load_multiple_templates(sys.argv[4])
+        else:
+            detector = PlacementDetector(template_path=sys.argv[3], threshold=0.65)
+        
+        detections = detector.detect_placements(image_path)
+        
+        print(f"\nFound {len(detections)} placements:")
         for i, (x, y, conf) in enumerate(detections):
             print(f"  {i+1}. Position: ({x}, {y}), Confidence: {conf:.3f}")
         
         # Save visualization
-        output = sys.argv[2].replace('.png', '_detections.png')
-        detector.visualize_detections(sys.argv[2], detections, output_path=output)
+        output = image_path.replace('.png', '_detections.png')
+        detector.visualize_detections(image_path, detections, output_path=output)
     
     elif command == "batch":
         if len(sys.argv) < 4:
-            print("Error: Provide image_dir and template_path")
+            print("Error: Provide image_dir and template_path or --templates <dir>")
             sys.exit(1)
-        batch_detect_placements(sys.argv[2], sys.argv[3])
+        
+        image_dir = sys.argv[2]
+        
+        # Check if using multi-template mode
+        if sys.argv[3] == "--templates" and len(sys.argv) >= 5:
+            batch_detect_placements(image_dir, template_dir=sys.argv[4])
+        else:
+            batch_detect_placements(image_dir, template_path=sys.argv[3])
     
     else:
         print(f"Unknown command: {command}")
