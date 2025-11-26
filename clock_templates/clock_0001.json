@@ -1,20 +1,20 @@
 {
   "template_id": 1,
-  "source_frame": "frame_000013.png",
-  "frame_index": 13,
+  "source_frame": "frame_000014.png",
+  "frame_index": 14,
   "click_point": {
     "x": 284,
-    "y": 657
+    "y": 656
   },
   "region": {
-    "x1": 264,
-    "y1": 637,
-    "x2": 304,
-    "y2": 677
+    "x1": 269,
+    "y1": 641,
+    "x2": 299,
+    "y2": 671
   },
   "size": {
-    "width": 40,
-    "height": 40
+    "width": 30,
+    "height": 30
   },
   "background_removed": true
 }
