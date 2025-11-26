@@ -76,30 +76,40 @@ def find_frames_with_clocks(frames_dir: str, num_samples: int = 20) -> list:
     return sampled
 
 
-def extract_templates_interactive(candidates: list, output_dir: str):
+def extract_templates_interactive(candidates: list, output_dir: str, target_count: int = 30):
     """
     Interactively extract clock templates from candidate frames.
     
     Args:
         candidates: List of dicts with 'path' and 'contour' keys
         output_dir: Directory to save templates
+        target_count: Target number of templates to create
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
+    # Check for existing templates
+    existing_templates = sorted(output_path.glob("clock_template_*.png"))
+    template_count = len(existing_templates)
+    
+    if template_count > 0:
+        print(f"\nFound {template_count} existing templates in {output_dir}")
+        response = input(f"Continue adding more? (y/n): ").strip().lower()
+        if response != 'y':
+            return template_count
+    
     print("\n" + "="*70)
     print("INTERACTIVE CLOCK TEMPLATE EXTRACTION")
     print("="*70)
+    print(f"\nTarget: {target_count} templates (current: {template_count})")
     print("\nInstructions:")
     print("  - A frame with a potential clock will be shown")
     print("  - Click and drag to select the clock region")
     print("  - Press 's' to save this template")
     print("  - Press 'n' to skip to next frame")
-    print("  - Press 'q' to quit")
-    print("\nGoal: Extract 5-10 templates showing different clock states")
+    print("  - Press 'q' to quit (you can resume later)")
+    print("\nTip: Select clocks at different animation stages")
     print("="*70 + "\n")
-    
-    template_count = 0
     
     for idx, candidate in enumerate(candidates):
         frame_path = candidate['path']
@@ -194,15 +204,23 @@ def extract_templates_interactive(candidates: list, output_dir: str):
                 break
             
             elif key == ord('q'):
-                print(f"\nQuitting. Created {template_count} templates.")
+                print(f"\nQuitting. Total templates: {template_count}")
                 cv2.destroyAllWindows()
                 return template_count
         
         cv2.destroyAllWindows()
+        
+        # Check if we've reached target
+        if template_count >= target_count:
+            print(f"\n✓ Target reached: {template_count} templates created!")
+            break
     
     print(f"\n{'='*70}")
-    print(f"COMPLETED: Created {template_count} clock templates")
+    print(f"COMPLETED: Total {template_count} clock templates")
     print(f"Templates saved to: {output_path}")
+    if template_count < target_count:
+        print(f"Note: Created {template_count}/{target_count} templates")
+        print(f"      You can run again to add more")
     print(f"{'='*70}")
     
     return template_count
@@ -260,10 +278,10 @@ def main():
     parser.add_argument("--mode", "-m", choices=["interactive", "auto"], 
                        default="interactive",
                        help="Extraction mode (default: interactive)")
-    parser.add_argument("--samples", "-s", type=int, default=20,
-                       help="Number of frames to check (default: 20)")
-    parser.add_argument("--target", "-t", type=int, default=10,
-                       help="Target number of templates to create (default: 10)")
+    parser.add_argument("--samples", "-s", type=int, default=50,
+                       help="Number of frames to check (default: 50)")
+    parser.add_argument("--target", "-t", type=int, default=30,
+                       help="Target number of templates to create (default: 30)")
     
     args = parser.parse_args()
     
@@ -285,15 +303,20 @@ def main():
             return
         
         # Extract templates interactively
-        count = extract_templates_interactive(candidates, args.output)
+        count = extract_templates_interactive(candidates, args.output, target_count=args.target)
         
-        if count >= 5:
-            print("\n✓ SUCCESS: You now have enough templates for detection!")
-            print(f"\nNext step:")
-            print(f"  python detect_placement.py batch {args.frames_dir} --templates {args.output}")
+        if count >= 20:
+            print("\n✓ SUCCESS: Excellent template coverage!")
+            print(f"\nNext steps:")
+            print(f"  1. Test: python detect_placement.py detect <frame.png> --templates {args.output}")
+            print(f"  2. Batch: python create_placement_dataset.py <data_dir> --method template --templates {args.output}")
+        elif count >= 10:
+            print(f"\n✓ Good: {count} templates should work well")
+            print(f"   (Can add more by running script again)")
         else:
             print(f"\n⚠ WARNING: Only {count} templates created.")
-            print(f"Recommended: Create at least 5-10 templates for good coverage.")
+            print(f"Recommended: At least 10-15 templates for 10fps data")
+            print(f"Run the script again to add more templates.")
     
     elif args.mode == "auto":
         extract_templates_auto(args.frames_dir, args.output, args.target)
