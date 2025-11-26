@@ -1,0 +1,14 @@
+{
+  "template_id": 13,
+  "source_frame": "E:\\Projects\\CS541\\ClashRoyale\\hf_subset\\arena_31\\5eacd6a6-1169-46df-b5e5-4b10798678fb\\images\\frame_000056.png",
+  "region": {
+    "x1": 74,
+    "y1": 519,
+    "x2": 108,
+    "y2": 560
+  },
+  "size": {
+    "width": 34,
+    "height": 41
+  }
+}

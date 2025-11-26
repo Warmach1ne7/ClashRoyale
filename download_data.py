@@ -1,7 +1,7 @@
 import random
 import argparse
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from huggingface_hub import list_repo_files, hf_hub_download
 
 DATASET_ID = "chrisrca/clash-royale-tv-replays"
@@ -40,6 +40,18 @@ def sample_frames(by_arena: Dict[str, List[Tuple[str, str]]],
         print(f"[INFO] Selected {len(chosen):>3} from {arena} (available: {len(candidates)})")
     return selected
 
+def find_specific_game(by_arena: Dict[str, List[Tuple[str, str]]], 
+                       game_id: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Search all arenas for a game folder matching game_id.
+    Returns (arena, game_folder, repo_path) or None if not found.
+    """
+    for arena, games in by_arena.items():
+        for game_folder, repo_path in games:
+            if game_folder == game_id:
+                return (arena, game_folder, repo_path)
+    return None
+
 def download_selected(dataset_id: str,
                       selection: List[Tuple[str, str, str]],
                       out_dir: Path,
@@ -63,11 +75,12 @@ def download_selected(dataset_id: str,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default=DATASET_ID)
+    ap.add_argument("--game", type=str, help="Download a specific game UUID (e.g., from arena_31/<uuid>). Overrides sampling.")
     ap.add_argument("--arenas", nargs="+", help="Arena folders (e.g. arena_01 arena_02). If absent, use all discovered.")
     ap.add_argument("--all-arenas", action="store_true", help="Use all discovered arenas (overrides --arenas)")
     ap.add_argument("--per-arena", type=int, default=3, help="Minimum/target frames.parquet per arena")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out", default="E:\Projects\CS541\ClashRoyale\hf_subset")
+    ap.add_argument("--out", default=r"E:\Projects\CS541\ClashRoyale\hf_subset")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
@@ -75,16 +88,27 @@ def main():
     discovered = sorted(by_arena.keys())
     print(f"[INFO] Discovered arenas: {discovered}")
 
-    if args.all_arenas or not args.arenas:
-        arenas = discovered
+    # Handle --game (specific download)
+    if args.game:
+        result = find_specific_game(by_arena, args.game)
+        if result is None:
+            print(f"[ERROR] Game '{args.game}' not found in any arena.")
+            return
+        arena, game_folder, repo_path = result
+        print(f"[INFO] Found game '{args.game}' in {arena}")
+        selection = [(arena, game_folder, repo_path)]
     else:
-        arenas = args.arenas
+        # Sample logic
+        if args.all_arenas or not args.arenas:
+            arenas = discovered
+        else:
+            arenas = args.arenas
 
-    if not arenas:
-        print("[ERROR] No arenas selected or discovered."); return
+        if not arenas:
+            print("[ERROR] No arenas selected or discovered."); return
 
-    selection = sample_frames(by_arena, arenas, args.per_arena, args.seed)
-    print(f"[INFO] Total files to download: {len(selection)}")
+        selection = sample_frames(by_arena, arenas, args.per_arena, args.seed)
+        print(f"[INFO] Total files to download: {len(selection)}")
 
     download_selected(args.dataset, selection, Path(args.out), overwrite=args.overwrite)
     print("[DONE]")

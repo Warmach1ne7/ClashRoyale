@@ -1,14 +1,14 @@
 {
   "template_id": 2,
-  "source_frame": "E:\\Projects\\CS541\\ClashRoyale\\hf_subset\\arena_11\\062dd3ec-6721-49b7-88f5-1ae14ec37620\\images\\frame_000330.png",
+  "source_frame": "E:\\Projects\\CS541\\ClashRoyale\\hf_subset\\arena_31\\5eacd6a6-1169-46df-b5e5-4b10798678fb\\images\\frame_000027.png",
   "region": {
-    "x1": 237,
-    "y1": 629,
-    "x2": 282,
-    "y2": 683
+    "x1": 289,
+    "y1": 516,
+    "x2": 328,
+    "y2": 563
   },
   "size": {
-    "width": 45,
-    "height": 54
+    "width": 39,
+    "height": 47
   }
 }
