@@ -74,16 +74,38 @@ def extract_one_parquet(
     print(f"[DONE] {parquet_path} -> wrote {written} images in {out_dir}")
     return written
 
-def find_parquets(root: Path, parquet_name: str):
+def find_parquets(root: Path, parquet_name: str, arena_filter: Optional[str] = None, game_filter: Optional[str] = None):
     """
     Only look one level down for directories named arena_*,
     then search inside those (recursively) for parquet_name.
+    
+    Args:
+        root: Root directory containing arena_* folders
+        parquet_name: Name of parquet file to find
+        arena_filter: If specified, only process this specific arena (e.g., "arena_11" or "11")
+        game_filter: If specified, only process games matching this pattern (e.g., "game_01" or UUID)
     """
     parquets = []
     for child in root.iterdir():
-        if child.is_dir() and child.name.startswith("arena_"):
-            # search under this arena dir
+        if not child.is_dir() or not child.name.startswith("arena_"):
+            continue
+        
+        # Check arena filter
+        if arena_filter:
+            arena_match = arena_filter if arena_filter.startswith("arena_") else f"arena_{arena_filter}"
+            if child.name != arena_match:
+                continue
+        
+        # If game filter specified, only look in matching game directories
+        if game_filter:
+            for game_dir in child.iterdir():
+                if game_dir.is_dir() and game_filter in game_dir.name:
+                    game_parquets = list(game_dir.rglob(parquet_name))
+                    parquets.extend(game_parquets)
+        else:
+            # No game filter, get all parquets in this arena
             parquets.extend(child.rglob(parquet_name))
+    
     return sorted(parquets)
 
 def main():
@@ -92,6 +114,10 @@ def main():
                     help="Root containing arena_* folders.")
     ap.add_argument("--parquet-name", default="frames.parquet",
                     help="Parquet filename to find inside arena subfolders.")
+    ap.add_argument("--arena", type=str, default=None,
+                    help="Extract only from specific arena (e.g., 'arena_11' or '11').")
+    ap.add_argument("--game", type=str, default=None,
+                    help="Extract only from games matching this pattern (e.g., 'game_01' or UUID substring).")
     ap.add_argument("--image-col", default="image",
                     help="Column name holding image bytes.")
     ap.add_argument("--out-subdir", default="images",
@@ -115,12 +141,19 @@ def main():
         print(f"[ERROR] Root does not exist: {root}")
         return
 
-    parquets = find_parquets(root, args.parquet_name)
+    filter_msg = []
+    if args.arena:
+        filter_msg.append(f"arena={args.arena}")
+    if args.game:
+        filter_msg.append(f"game={args.game}")
+    filter_str = f" (filters: {', '.join(filter_msg)})" if filter_msg else ""
+
+    parquets = find_parquets(root, args.parquet_name, arena_filter=args.arena, game_filter=args.game)
     if not parquets:
-        print(f"[INFO] No '{args.parquet_name}' files found under arenas in {root}")
+        print(f"[INFO] No '{args.parquet_name}' files found under arenas in {root}{filter_str}")
         return
 
-    print(f"[INFO] Found {len(parquets)} parquet files:")
+    print(f"[INFO] Found {len(parquets)} parquet files{filter_str}:")
     for p in parquets:
         print(f"  - {p}")
 

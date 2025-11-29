@@ -99,11 +99,12 @@ class PlacementDetector:
         self.template_w = self.templates[0]['width']
         self.template_h = self.templates[0]['height']
     
-    def detect_placements(self, image_path: str, 
+    def detect_placements(self, img, 
                          method: int = cv2.TM_CCOEFF_NORMED,
                          multi_scale: bool = False,
                          scales: List[float] = None,
-                         use_all_templates: bool = True) -> List[Tuple[int, int, float]]:
+                         use_all_templates: bool = True,
+                         return_template_id: bool = False) -> List[Tuple]:
         """
         Detect placement locations in an image.
         
@@ -113,9 +114,10 @@ class PlacementDetector:
             multi_scale: Whether to try multiple scales (usually not needed at fixed FPS)
             scales: List of scales to try (default: [0.9, 1.0, 1.1])
             use_all_templates: If True and multiple templates loaded, tries all of them
+            return_template_id: If True, returns template ID that matched
         
         Returns:
-            List of (x, y, confidence) tuples for detected placements
+            List of (x, y, confidence) or (x, y, confidence, template_id) tuples
         """
         # Check if we have templates
         has_multiple = hasattr(self, 'templates') and len(self.templates) > 0
@@ -124,9 +126,8 @@ class PlacementDetector:
             raise ValueError("No template loaded. Call load_template() or load_multiple_templates() first.")
         
         # Load image
-        img = cv2.imread(image_path)
         if img is None:
-            raise ValueError(f"Could not load image from {image_path}")
+            raise ValueError(f"Could not load image")
         
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
@@ -181,24 +182,27 @@ class PlacementDetector:
                     # Store center point instead of top-left
                     center_x = pt[0] + w // 2
                     center_y = pt[1] + h // 2
-                    all_detections.append((center_x, center_y, confidence, scale))
+                    template_id = template_info['name'] if return_template_id else None
+                    all_detections.append((center_x, center_y, confidence, scale, template_id))
         
         # Apply Non-Maximum Suppression to remove duplicate detections
-        detections = self._non_max_suppression(all_detections, overlap_threshold=30)
+        detections = self._non_max_suppression(all_detections, overlap_threshold=30, return_template_id=return_template_id)
         
         return detections
     
-    def _non_max_suppression(self, detections: List[Tuple[int, int, float, float]], 
-                            overlap_threshold: int = 30) -> List[Tuple[int, int, float]]:
+    def _non_max_suppression(self, detections: List[Tuple], 
+                            overlap_threshold: int = 30,
+                            return_template_id: bool = False) -> List[Tuple]:
         """
         Remove overlapping detections, keeping only the one with highest confidence.
         
         Args:
-            detections: List of (x, y, confidence, scale)
+            detections: List of (x, y, confidence, scale, template_id) or (x, y, confidence, scale)
             overlap_threshold: Maximum distance (pixels) between detections to be considered duplicates
+            return_template_id: Whether to include template_id in output
         
         Returns:
-            Filtered list of (x, y, confidence)
+            Filtered list of (x, y, confidence) or (x, y, confidence, template_id)
         """
         if not detections:
             return []
@@ -209,12 +213,13 @@ class PlacementDetector:
         kept = []
         
         for det in detections:
-            x, y, conf, scale = det
+            x, y, conf, scale = det[:4]
+            template_id = det[4] if len(det) > 4 else 'unknown'
             
             # Check if this detection overlaps with any kept detection
             is_duplicate = False
             for kept_det in kept:
-                kx, ky, kconf = kept_det
+                kx, ky = kept_det[0], kept_det[1]
                 distance = np.sqrt((x - kx)**2 + (y - ky)**2)
                 
                 if distance < overlap_threshold:
@@ -222,7 +227,10 @@ class PlacementDetector:
                     break
             
             if not is_duplicate:
-                kept.append((x, y, conf))
+                if return_template_id:
+                    kept.append((x, y, conf, template_id))
+                else:
+                    kept.append((x, y, conf))
         
         return kept
     

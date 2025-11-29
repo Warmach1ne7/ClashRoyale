@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.png
+*.csv
+*.parquet
 *.egg-info/
 .build/
 dist/
